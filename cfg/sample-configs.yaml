@@ -1,0 +1,57 @@
+# CONFIGURATION FILE FOR AGE-OF-ACQUISITION PREDICTION TRAINING & PREDICTING
+
+# RANDOM SEED
+seed: 2023
+
+# DATA LOADING
+aoa_csv_filepath: "data/aoa_data.csv"
+aoapred_train_filepath: "data/aoapred-train.json"
+aoapred_val_filepath: "data/aoapred-val.json"
+aoapred_test_filepath: "data/aoapred-test.json"
+
+# MODEL TRAINING
+train_loader:
+  batch_size: 8
+  num_workers: 8
+  shuffle: True
+val_loader:
+  batch_size: 64
+  num_workers: 8
+
+# MODEL CONFIGS
+tokenizer_name: bert-base-uncased
+model_configs:
+  model_name: bert-base-uncased
+  interim_linear_dim: 1024
+
+
+# TRAINER CLASS CONFIGS
+trainer_configs:
+  optimizer:
+    lr: 0.001
+    weight_decay: 0.1
+  scaler: true
+  scheduler:
+    use: True
+    configs:
+      mode: "min"
+      factor: 0.5
+      patience: 5
+      min_lr: 6.0e-5
+  wandb:
+    use: True
+    init_configs:
+      entity: 
+      reinit: true
+      project: aoapred-test
+  max_saved_ckpts: 3
+
+
+# EXPERIMENT CONFIGS
+exp_configs:
+  exp_folder: exp/test/
+  epoch: 1
+  finetune:
+    use: true
+    ckpt:  
+  
