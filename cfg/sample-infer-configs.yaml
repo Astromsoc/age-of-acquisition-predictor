@@ -1,0 +1,18 @@
+# CONFIGURATION FILE FOR AGE-OF-ACQUISITION PREDICTION
+# INFERENCE
+
+
+# DATA LOADING
+aoapred_test_filepath: "data/aoapred-test.json"
+consider_labels: true
+
+
+# MODEL TRAINING
+test_loader:
+  batch_size: 256
+  num_workers: 4
+
+
+# INFERRER CONFIGS
+ckpt: 
+  
