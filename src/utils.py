@@ -6,7 +6,7 @@
     Written & Maintained by: 
         Astromsoc
     Last Updated at:
-        Apr 3, 2023
+        Apr 4, 2023
 """
 
 
@@ -58,6 +58,27 @@ class AoATestDataset(Dataset):
 
     def __getitem__(self, index):
         return self.word_input_ids[index], self.lens[index], self.syllables[index]
+
+
+
+class AoATestDatasetWordOnly(Dataset):
+    def __init__(self, filepath: str, tokenizer_name: str):
+        super().__init__()
+        # archiving
+        self.filepath = filepath
+        self.tokenizer_name = tokenizer_name
+        # only loading words
+        self.words = [l.strip() for l in open(self.filepath, 'r')]
+        # build tokenizer & convert to token_ids
+        self.tokenizer = BertTokenizer.from_pretrained(self.tokenizer_name)
+        self.token_dicts = [self.tokenizer(w) for w in self.words]
+        self.word_input_ids = [torch.tensor(u['input_ids']) for u in self.token_dicts]
+
+    def __len__(self):
+        return len(self.words)
+
+    def __getitem__(self, index):
+        return self.word_input_ids[index]
 
 
 

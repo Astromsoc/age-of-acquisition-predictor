@@ -6,7 +6,7 @@
     Written & Maintained by: 
         Siyu Chen (schen4@andrew.cmu.edu)
     Last Updated at:
-        Apr 3, 2023
+        Apr 4, 2023
 """
 
 
@@ -140,10 +140,6 @@ class Trainer:
                     val_mae=f"{val_mae_this_epoch[i]:.6f}"
                 )
                 tqdm_bar.update()
-                # push to wandb
-                if self.cfgs['wandb']['use']:
-                    wandb.log({"val_loss_per_batch": val_loss_this_epoch[i],
-                               "val_mae_per_batch": val_mae_this_epoch[i]})
         # clear
         del ids, wlens, nsyls, ages
         torch.cuda.empty_cache()
@@ -333,6 +329,7 @@ def main(args):
     # initiate wandb log tracker
     if cfgs['trainer_configs']['wandb']['use']:
         wandb.init(**cfgs['trainer_configs']['wandb']['init_configs'])
+        wandb.log({'all_configs': cfgs})
 
     # start training
     trainer.train(cfgs['exp_configs'])
