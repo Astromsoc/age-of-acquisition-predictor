@@ -11,6 +11,7 @@
 
 
 import os
+import json
 import wandb
 import argparse
 import numpy as np
@@ -304,15 +305,16 @@ def main(args):
     # obtain the checkpoint model configs if continue training
     if cfgs['exp_configs']['finetune']['use']:
         prev_expfolder = os.path.dirname(cfgs['exp_configs']['finetune']['ckpt'])
-        cfgs['model_configs'] = yaml.load(open(os.path.join(prev_expfolder, 'model-configs.yaml'), 'r'))
+        cfgs['model_configs'] = json.load(open(os.path.join(prev_expfolder, 'model-configs.json'), 'r'))
     
     # create folder if not existed
     if not os.path.exists(cfgs['exp_configs']['folder']):
         os.makedirs(cfgs['exp_configs']['folder'], exist_ok=True)
-    # copy model configs
-    yaml.dump(cfgs['model_configs'], open(
-        os.path.join(cfgs['exp_configs']['folder'], 'model-configs.yaml'), 'w'
-    ))
+    # copy model configs & other configs
+    json.dump(cfgs['model_configs'], 
+              open(os.path.join(cfgs['exp_configs']['folder'], 'model-configs.json'), 'w'),
+              indent=4)
+    os.system(f"cp {args.config} {cfgs['exp_configs']['folder']}/configs.yaml")
 
     # build model
     model = easyReg(**cfgs['model_configs'])

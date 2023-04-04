@@ -26,6 +26,7 @@ tokenizer_name: bert-base-uncased
 model_configs:
   model_name: bert-base-uncased
   interim_linear_dim: 256
+  dropout: 0.3
 
 
 # TRAINER CLASS CONFIGS
@@ -42,7 +43,7 @@ trainer_configs:
       patience: 10
       min_lr: 5.0e-7
   wandb:
-    use: true
+    use: false
     init_configs:
       entity: 
       reinit: true
@@ -53,7 +54,7 @@ trainer_configs:
 # EXPERIMENT CONFIGS
 exp_configs:
   folder: exp/ablations
-  epoch: 50
+  epoch: 20
   finetune:
     use: false
     ckpt: 
