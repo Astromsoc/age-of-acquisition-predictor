@@ -5,6 +5,8 @@
 seed: 2023
 
 # DATA LOADING
+# the original csv file is not always used; only called when splitting is needec
+aoa-csv-filepath: "data/aoa-data.csv"
 aoapred_train_filepath: "data/aoapred-train.json"
 aoapred_val_filepath: "data/aoapred-val.json"
 # the test file is not used here but shall be included to check data subsets completeness
@@ -23,24 +25,24 @@ val_loader:
 tokenizer_name: bert-base-uncased
 model_configs:
   model_name: bert-base-uncased
-  interim_linear_dim: 1024
+  interim_linear_dim: 256
 
 
 # TRAINER CLASS CONFIGS
 trainer_configs:
   optimizer:
     lr: 5.0e-5
-    weight_decay: 0.05
+    weight_decay: 0.10
   scaler: true
   scheduler:
     use: True
     configs:
       mode: "min"
       factor: 0.5
-      patience: 5
-      min_lr: 6.0e-5
+      patience: 10
+      min_lr: 5.0e-7
   wandb:
-    use: false
+    use: true
     init_configs:
       entity: 
       reinit: true
@@ -50,8 +52,8 @@ trainer_configs:
 
 # EXPERIMENT CONFIGS
 exp_configs:
-  folder: exp/
-  epoch: 2
+  folder: exp/ablations
+  epoch: 50
   finetune:
     use: false
     ckpt: 

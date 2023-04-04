@@ -20,6 +20,7 @@ from ruamel.yaml import YAML
 import torch
 from torchsummaryX import summary
 from torch.utils.data import DataLoader
+from transformers import BertTokenizer
 
 from src.utils import *
 from src.models import *
@@ -34,7 +35,7 @@ class Trainer:
         self.model = model
         self.trn_loader = trn_loader
         self.val_loader = val_loader
-        self.bests = {'loss': float('inf'), 'epoch': -1}
+        self.bests = {'mae': float('inf'), 'epoch': -1}
         self.best_fps = list()
         self.criterion = nn.MSELoss()
         self.epoch = 1
@@ -103,14 +104,9 @@ class Trainer:
             tqdm_bar.update()
             # push to wandb
             if self.cfgs['wandb']['use']:
-                wandb.log({"train_loss_per_batch": f"{train_loss_this_epoch[i]:.6f}",
-                           "train_mae_per_batch": f"{train_mae_this_epoch[i]:.6f}",
-                           "grad_norm_per_batch": f"{grad_norm[i]:6f}"})
-            # update learning rate
-            if self.scheduler: 
-                self.scheduler.step(loss)
-                if self.cfgs['wandb']['use']:
-                    wandb.log({"lr_per_batch": self.optimizer.param_groups[0]['lr']})
+                wandb.log({"train_loss_per_batch": train_loss_this_epoch[i],
+                           "train_mae_per_batch": train_mae_this_epoch[i],
+                           "grad_norm_per_batch": grad_norm[i]})
         # clear
         del ids, wlens, nsyls, ages
         torch.cuda.empty_cache()
@@ -145,8 +141,8 @@ class Trainer:
                 tqdm_bar.update()
                 # push to wandb
                 if self.cfgs['wandb']['use']:
-                    wandb.log({"val_loss_per_batch": f"{val_loss_this_epoch[i]:.6f}",
-                              "val_mae_per_batch": f"{val_mae_this_epoch[i]:.6f}" })
+                    wandb.log({"val_loss_per_batch": val_loss_this_epoch[i],
+                               "val_mae_per_batch": val_mae_this_epoch[i]})
         # clear
         del ids, wlens, nsyls, ages
         torch.cuda.empty_cache()
@@ -173,6 +169,8 @@ class Trainer:
             self.train_gradnorms.append(train_avg_grad_norm)
             self.val_losses.append(val_avg_loss)
             self.val_maes.append(val_avg_mae)
+            # update learning rate
+            if self.scheduler: self.scheduler.step(self.val_losses[-1])
             # push to wandb
             if self.cfgs['wandb']['use']:
                 wandb.log({'train_loss_per_epoch': self.train_losses[-1],
@@ -192,16 +190,16 @@ class Trainer:
             Save a model checkpoint to specified experiment folder.
         """
         # check if a lower val MSE is reached or the bests are not reached
-        if self.val_losses[-1] < self.bests['loss'] or len(self.best_fps) < self.cfgs['max_saved_ckpts']:
+        if self.val_maes[-1] < self.bests['mae'] or len(self.best_fps) < self.cfgs['max_saved_ckpts']:
             # update best model stats
-            if self.val_losses[-1] < self.bests['loss']:
-                self.bests = {'loss': self.val_losses[-1], 'epoch': self.epoch}
+            if self.val_maes[-1] < self.bests['mae']:
+                self.bests = {'mae': self.val_maes[-1], 'epoch': self.epoch}
             # sort the saved checkpoints (before reaching maximum storage)
             if len(self.best_fps) < self.cfgs['max_saved_ckpts']:
                 self.best_fps = [self.best_fps[i] for i in sorted(list(range(len(self.best_fps))), 
                                                                   key=lambda i: -self.val_losses[i])]
             # save checkpoint
-            if len(self.best_fps) >= self.cfgs['max_saved_ckpts']:
+            if len(self.best_fps) == self.cfgs['max_saved_ckpts']:
                 # delete the oldest checkpoint
                 os.remove(self.best_fps.pop(0))
             # create folder if not existed
@@ -284,7 +282,7 @@ def main(args):
         # build tokenizer
         TOKENIZER = BertTokenizer.from_pretrained(cfgs['tokenizer_name'])
         # split dataset
-        subset_filepaths = split_dataset(cfgs['aoa_csv_filepath'], TOKENIZER)
+        subset_filepaths = split_dataset(cfgs['aoa-csv-filepath'], TOKENIZER)
         # output dataset
         for i, subname in enumerate('train val test'.split(' ')):
             # update configs
