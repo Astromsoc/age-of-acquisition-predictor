@@ -1,12 +1,12 @@
 """
-    The script & model(s) to predict age of acquisition for words
+    Script to infer age of acquisition for words.
     
     ---
 
     Written & Maintained by: 
-        Siyu Chen (schen4@andrew.cmu.edu)
+        Astromsoc
     Last Updated at:
-        Apr 3, 2023
+        Apr 6, 2023
 """
 
 
@@ -16,6 +16,7 @@ import argparse
 import numpy as np
 from tqdm import tqdm
 from ruamel.yaml import YAML
+yaml = YAML(typ='safe')
 
 import torch
 from torchsummaryX import summary
@@ -40,23 +41,20 @@ class Inferrer:
 
     def reload_ckpt(self):
         # load checkpoint
-        assert (os.path.exists(self.ckpt), 
-                f"\n[** FILE NOT EXISTED **] Can't load from [{self.ckpt}].\n")
+        assert os.path.exists(self.ckpt), f"\n[** FILE NOT EXISTED **] Can't load from [{self.ckpt}].\n"
         loaded = torch.load(self.ckpt, map_location=torch.device(self.device))
         print(f"\n[** MODEL LOADED **] Successfully loaded checkpoint from [{self.ckpt}]\n")
 
         # build hollow model given the copied model configs
-        yaml = YAML(typ='safe')
-        self.model_configs = yaml.load(open(self.mcfg_filepath, 'r'))
-        self.model = easyReg(**self.model_configs)
+        self.modelcfgs = ParamsObject(yaml.load(open(self.mcfg_filepath, 'r')))
+        self.model = ChooseYourModel[self.modelcfgs.choice](**self.modelcfgs.configs.__dict__)
         # load model state dict
         self.model.load_state_dict(loaded['model_state_dict'])
         # take model to device
         self.model.to(self.device)
 
         # load scaler
-        self.scaler = (torch.cuda.amp.GradScaler() 
-                       if loaded['configs']['trainer']['scaler'] else None)
+        self.scaler = torch.cuda.amp.GradScaler() if loaded['configs']['trainer']['scaler'] else None
 
 
 
@@ -108,12 +106,9 @@ class Inferrer:
 
 def main(args):
 
-    # load yaml instance
-    yaml = YAML(typ='safe')
-
     # load configurations
-    cfgs = yaml.load(open(args.config, 'r'))
-    addGoldens = cfgs['consider_labels']
+    cfgs = ParamsObject(yaml.load(open(args.config, 'r')))
+    addGoldens = cfgs.consider_labels
 
     # obtain device
     device = ('mps' if torch.backends.mps.is_available() else
@@ -123,16 +118,16 @@ def main(args):
 
     
     # build datasets
-    testDataset = (AoATrainDataset(cfgs['aoapred_test_filepath']) if addGoldens else
-                   AoATestDataset(cfgs['aoapred_test_filepath']))
+    testDataset = (AoATrainDataset(cfgs.aoapred_test_filepath) if addGoldens else
+                   AoATestDataset(cfgs.aoapred_test_filepath))
 
     # build dataloader
     testLoader = DataLoader(dataset=testDataset, shuffle=False, 
                             collate_fn=train_collate if addGoldens else test_collate, 
-                            **cfgs['test_loader'])
+                            **cfgs.test_loader.__dict__)
 
     # build inferrer
-    inferrer = Inferrer(ckpt=cfgs['ckpt'], device=device)
+    inferrer = Inferrer(ckpt=cfgs.ckpt, device=device)
 
     # infer all cases
     preds = inferrer.infer(testLoader, with_labels=addGoldens)
@@ -141,7 +136,7 @@ def main(args):
     # record the results
     output_filepath = os.path.join(
         inferrer.exp_folder, 
-        os.path.basename(cfgs['aoapred_test_filepath']).replace('.json', '-inferred.json')
+        os.path.basename(cfgs.aoapred_test_filepath).replace('.json', '-inferred.json')
     )
     for i, pred in enumerate(preds):
         preds[i] = {'word': testDataset.words[i], 'pred_age': pred[0]}

@@ -6,7 +6,7 @@ seed: 2023
 
 # DATA LOADING
 # the original csv file is not always used; only called when splitting is needec
-aoa-csv-filepath: "data/aoa-data.csv"
+aoa_csv_filepath: "data/aoa-data.csv"
 aoapred_train_filepath: "data/aoapred-train.json"
 aoapred_val_filepath: "data/aoapred-val.json"
 # the test file is not used here but shall be included to check data subsets completeness
@@ -16,44 +16,50 @@ aoapred_test_filepath: "data/aoapred-test.json"
 train_loader:
   batch_size: 256
   num_workers: 4
-  shuffle: True
+  shuffle: true
 val_loader:
   batch_size: 256
   num_workers: 4
 
 # MODEL CONFIGS
 tokenizer_name: bert-base-uncased
-model_configs:
-  model_name: bert-base-uncased
-  interim_linear_dim: 256
-  dropout: 0.3
+model:
+  choice: later-fused
+  configs:
+    model_name: bert-base-uncased
+    interim_linear_dim: 32
+    dropout: 0.5
+    concat_wlen: true
+    concat_nsyl: true
 
 
 # TRAINER CLASS CONFIGS
 trainer_configs:
   optimizer:
-    lr: 5.0e-5
+    lr: 5.0e-4
     weight_decay: 0.10
   scaler: true
   scheduler:
-    use: True
+    use: true
     configs:
       mode: "min"
       factor: 0.5
-      patience: 10
-      min_lr: 5.0e-7
+      patience: 5
+      min_lr: 5.0e-8
   wandb:
-    use: false
+    use: true
     init_configs:
-      entity: 
+      name: 
+      entity: Astromsoc
       reinit: true
-      project: 
-  max_saved_ckpts: 3
+      project: aoapred
+  max_saved_ckpts: 2
 
 
 # EXPERIMENT CONFIGS
 exp_configs:
-  folder: exp/ablations
+  folder: exp/test
+  anno: ""
   epoch: 20
   finetune:
     use: false

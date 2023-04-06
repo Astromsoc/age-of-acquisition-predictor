@@ -1,12 +1,12 @@
 """
-    The script & model(s) to predict age of acquisition for words
+    Script to train models on predicting age of acquisition for words.
     
     ---
 
     Written & Maintained by: 
-        Siyu Chen (schen4@andrew.cmu.edu)
+        Astromsoc
     Last Updated at:
-        Apr 4, 2023
+        Apr 6, 2023
 """
 
 
@@ -17,6 +17,7 @@ import argparse
 import numpy as np
 from tqdm import tqdm
 from ruamel.yaml import YAML
+yaml = YAML(typ='safe')
 
 import torch
 from torchsummaryX import summary
@@ -29,11 +30,14 @@ from src.split import split_dataset
 
 
 
+
+
 class Trainer:
-    def __init__(self, cfgs: dict, model: nn.Module,
+    def __init__(self, cfgs: ParamsObject, model: nn.Module, tokenizer_name: str,
                  trn_loader: DataLoader, val_loader: DataLoader, device: str='cuda'):
         self.cfgs = cfgs
         self.model = model
+        self.tokenizer_name = tokenizer_name
         self.trn_loader = trn_loader
         self.val_loader = val_loader
         self.bests = {'mae': float('inf'), 'epoch': -1}
@@ -53,11 +57,11 @@ class Trainer:
     
 
     def init_from_cfgs(self):
-        self.scaler = torch.cuda.amp.GradScaler() if self.cfgs['scaler'] else None
-        self.optimizer = torch.optim.AdamW(self.model.parameters(), **self.cfgs['optimizer'])
+        self.scaler = torch.cuda.amp.GradScaler() if self.cfgs.scaler else None
+        self.optimizer = torch.optim.AdamW(self.model.parameters(), **self.cfgs.optimizer.__dict__)
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer, **self.cfgs['scheduler']['configs']
-        ) if self.cfgs['scheduler']['use'] else None
+            self.optimizer, **self.cfgs.scheduler.configs.__dict__
+        ) if self.cfgs.scheduler.use else None
 
 
     def train_epoch(self):
@@ -104,7 +108,7 @@ class Trainer:
             )
             tqdm_bar.update()
             # push to wandb
-            if self.cfgs['wandb']['use']:
+            if self.cfgs.wandb.use:
                 wandb.log({"train_loss_per_batch": train_loss_this_epoch[i],
                            "train_mae_per_batch": train_mae_this_epoch[i],
                            "grad_norm_per_batch": grad_norm[i]})
@@ -154,10 +158,10 @@ class Trainer:
         """
 
         # if finetuning: load checkpoint
-        if expcfgs['finetune']['use']:
-            self.load_model(expcfgs['finetune']['ckpt'])
+        if expcfgs.finetune.use:
+            self.load_model(expcfgs.finetune.ckpt)
 
-        while self.epoch <= expcfgs['epoch']:
+        while self.epoch <= expcfgs.epoch:
             train_avg_loss, train_avg_mae, train_avg_grad_norm = self.train_epoch()
             val_avg_loss, val_avg_mae = self.eval_epoch()
             # record
@@ -169,7 +173,7 @@ class Trainer:
             # update learning rate
             if self.scheduler: self.scheduler.step(self.val_losses[-1])
             # push to wandb
-            if self.cfgs['wandb']['use']:
+            if self.cfgs.wandb.use:
                 wandb.log({'train_loss_per_epoch': self.train_losses[-1],
                            'train_mae_per_epoch': self.train_maes[-1],
                            'train_gradnorm_per_epoch': self.train_gradnorms[-1],
@@ -186,24 +190,29 @@ class Trainer:
         """
             Save a model checkpoint to specified experiment folder.
         """
-        # check if a lower val MSE is reached or the bests are not reached
-        if self.val_maes[-1] < self.bests['mae'] or len(self.best_fps) < self.cfgs['max_saved_ckpts']:
+        # check if a lower val MSE is reached or the bests are not reached or it's the last epoch
+        if (self.val_maes[-1] < self.bests['mae'] 
+            or len(self.best_fps) < self.cfgs.max_saved_ckpts
+            or self.epoch == expcfgs.epoch):
             # update best model stats
             if self.val_maes[-1] < self.bests['mae']:
                 self.bests = {'mae': self.val_maes[-1], 'epoch': self.epoch}
             # sort the saved checkpoints (before reaching maximum storage)
-            if len(self.best_fps) < self.cfgs['max_saved_ckpts']:
+            if len(self.best_fps) < self.cfgs.max_saved_ckpts:
                 self.best_fps = [self.best_fps[i] for i in sorted(list(range(len(self.best_fps))), 
                                                                   key=lambda i: -self.val_losses[i])]
             # save checkpoint
-            if len(self.best_fps) == self.cfgs['max_saved_ckpts']:
+            if len(self.best_fps) == self.cfgs.max_saved_ckpts:
                 # delete the oldest checkpoint
                 os.remove(self.best_fps.pop(0))
             # create folder if not existed
-            if not os.path.exists(expcfgs['folder']):
-                os.makedirs(expcfgs['folder'], exist_ok=True)
+            if not os.path.exists(expcfgs.folder):
+                os.makedirs(expcfgs.folder, exist_ok=True)
             # add new filepath
-            self.best_fps.append(os.path.join(expcfgs['folder'], f"epoch-{self.epoch}.pt"))
+            if (self.epoch != expcfgs.epoch or self.bests['mae'] == self.val_maes[-1]):
+                self.best_fps.append(os.path.join(expcfgs.folder, f"epoch-{self.epoch}.pt"))
+            output_filepath = (self.best_fps[-1] if self.epoch != expcfgs.epoch 
+                               else os.path.join(expcfgs.folder, f"epoch-{self.epoch}.pt"))
             # save model checkpoint
             torch.save({
                 'model_state_dict': self.model.state_dict(),
@@ -216,8 +225,10 @@ class Trainer:
                 'train_gradnorms': self.train_gradnorms,
                 'val_losses': self.val_losses,
                 'val_maes': self.val_maes,
-                'configs': {'trainer': self.cfgs, 'exp': expcfgs}
-            }, self.best_fps[-1])
+                'configs': {'trainer': self.cfgs, 
+                            'exp': expcfgs,
+                            'tokenizer': self.tokenizer_name}
+            }, output_filepath)
             print(f"\n[** MODEL SAVED **] Successfully saved checkpoint to [{self.best_fps[-1]}]\n")
     
 
@@ -225,8 +236,7 @@ class Trainer:
         """
             Load a model checkpoint from specified filepath.
         """
-        assert (os.path.exists(ckpt_filepath), 
-                f"\n[** FILE NOT EXISTED **] Can't load from [{ckpt_filepath}].\n")
+        assert os.path.exists(ckpt_filepath), f"\n[** FILE NOT EXISTED **] Can't load from [{ckpt_filepath}].\n"
         loaded = torch.load(ckpt_filepath, map_location=torch.device(self.device))
         print(f"\n[** MODEL LOADED **] Successfully loaded checkpoint from [{ckpt_filepath}]\n")
 
@@ -255,15 +265,12 @@ class Trainer:
 
 def main(args):
 
-    # load yaml instance
-    yaml = YAML(typ='safe')
-
     # load configurations
-    cfgs = yaml.load(open(args.config, 'r'))
+    cfgs = ParamsObject(yaml.load(open(args.config, 'r')))
 
     # fix random seeds
-    np.random.seed(cfgs['seed'])
-    torch.manual_seed(cfgs['seed'])
+    np.random.seed(cfgs.seed)
+    torch.manual_seed(cfgs.seed)
 
     # obtain device
     device = ('mps' if torch.backends.mps.is_available() else
@@ -273,66 +280,85 @@ def main(args):
 
 
     # split dataset
-    if (not os.path.exists(cfgs['aoapred_train_filepath'])
-        or not os.path.exists(cfgs['aoapred_val_filepath'])
-        or not os.path.exists(cfgs['aoapred_test_filepath'])):
+    if (not os.path.exists(cfgs.aoapred_train_filepath)
+        or not os.path.exists(cfgs.aoapred_val_filepath)
+        or not os.path.exists(cfgs.aoapred_test_filepath)):
         # build tokenizer
-        TOKENIZER = BertTokenizer.from_pretrained(cfgs['tokenizer_name'])
+        TOKENIZER = BertTokenizer.from_pretrained(cfgs.tokenizer_name)
         # split dataset
-        subset_filepaths = split_dataset(cfgs['aoa-csv-filepath'], TOKENIZER)
+        subset_filepaths = split_dataset(cfgs.aoa_csv_filepath, TOKENIZER)
         # output dataset
         for i, subname in enumerate('train val test'.split(' ')):
             # update configs
-            cfgs[f"aoapred_{subname}_filepath"] = subset_filepaths[i]
+            cfgs.__dict__[f"aoapred_{subname}_filepath"] = subset_filepaths[i]
     
     # build datasets
-    trainDataset = AoATrainDataset(cfgs['aoapred_train_filepath'])
-    valDataset = AoATrainDataset(cfgs['aoapred_val_filepath'])
+    trainDataset = AoATrainDataset(cfgs.aoapred_train_filepath)
+    valDataset = AoATrainDataset(cfgs.aoapred_val_filepath)
 
     # build dataloaders
     trainLoader = DataLoader(dataset=trainDataset, 
                              collate_fn=train_collate, 
-                             **cfgs['train_loader'])
+                             **cfgs.train_loader.__dict__)
     valLoader = DataLoader(dataset=valDataset, 
                            shuffle=False, 
                            collate_fn=train_collate, 
-                           **cfgs['val_loader'])
+                           **cfgs.val_loader.__dict__)
 
     # obtain the checkpoint model configs if continue training
-    if cfgs['exp_configs']['finetune']['use']:
-        prev_expfolder = os.path.dirname(cfgs['exp_configs']['finetune']['ckpt'])
-        cfgs['model_configs'] = json.load(open(os.path.join(prev_expfolder, 'model-configs.json'), 'r'))
+    if cfgs.exp_configs.finetune.use:
+        prev_expfolder = os.path.dirname(cfgs.exp_configs.finetune.ckpt)
+        cfgs.model = ParamsObject(json.load(open(os.path.join(prev_expfolder, 'model-configs.json'), 'r')))
     
     # create folder if not existed
-    if not os.path.exists(cfgs['exp_configs']['folder']):
-        os.makedirs(cfgs['exp_configs']['folder'], exist_ok=True)
+    if not os.path.exists(cfgs.exp_configs.folder):
+        os.makedirs(cfgs.exp_configs.folder, exist_ok=True)
     # copy model configs & other configs
-    json.dump(cfgs['model_configs'], 
-              open(os.path.join(cfgs['exp_configs']['folder'], 'model-configs.json'), 'w'),
+    json.dump({'choice': cfgs.model.choice, 'configs': cfgs.model.configs.__dict__},
+              open(os.path.join(cfgs.exp_configs.folder, 'model-configs.json'), 'w'),
               indent=4)
-    os.system(f"cp {args.config} {cfgs['exp_configs']['folder']}/configs.yaml")
+    os.system(f"cp {args.config} {cfgs.exp_configs.folder}/configs.yaml")
 
     # build model
-    model = easyReg(**cfgs['model_configs'])
+    assert cfgs.model.choice in ChooseYourModel.keys(), (f"[** INVALID MODEL **] {cfgs.model.choice} "
+                                         f"is provided. Please choose from: {ChooseYourModel.keys()}.")
+    model = ChooseYourModel[cfgs.model.choice](**cfgs.model.configs.__dict__)
 
     # show model summary
     model.eval()
     ids, wlen, nsyl, _ = next(iter(trainLoader))
-    print(summary(model, ids, wlen, nsyl))
+    with torch.inference_mode():
+        print(summary(model, ids, wlen, nsyl))
 
     # build trainer
     trainer = Trainer(
-        cfgs=cfgs['trainer_configs'], model=model, trn_loader=trainLoader,
-        val_loader=valLoader, device=device
+        cfgs=cfgs.trainer_configs, 
+        tokenizer_name=cfgs.tokenizer_name,
+        model=model, 
+        trn_loader=trainLoader,
+        val_loader=valLoader, 
+        device=device
     )
 
     # initiate wandb log tracker
-    if cfgs['trainer_configs']['wandb']['use']:
-        wandb.init(**cfgs['trainer_configs']['wandb']['init_configs'])
-        wandb.log({'all_configs': cfgs})
+    if cfgs.trainer_configs.wandb.use:
+        # add run name automatically
+        cfgs.trainer_configs.wandb.init_configs.name = (
+            f"{cfgs.model.choice}-"
+            f"interrim-dim-{cfgs.model.configs.interim_linear_dim}-"
+            f"dropout-{cfgs.model.configs.dropout:.2f}-"
+            f"wd-{cfgs.trainer_configs.optimizer.weight_decay:.2f}-"
+            f"bs-{cfgs.train_loader.batch_size}-"
+            f"lr-{cfgs.trainer_configs.optimizer.lr:.1e}-"
+            f"{'with' if cfgs.model.configs.concat_wlen else 'no'}-wlen-"
+            f"{'with' if cfgs.model.configs.concat_nsyl else 'no'}-nsyl"
+        )
+        if cfgs.exp_configs.anno: 
+            cfgs.trainer_configs.wandb.init_configs.name += f"-{cfgs.exp_configs.anno}" 
+        wandb.init(config=cfgs, **cfgs.trainer_configs.wandb.init_configs.__dict__)
 
     # start training
-    trainer.train(cfgs['exp_configs'])
+    trainer.train(cfgs.exp_configs)
     
 
 
@@ -346,7 +372,6 @@ if __name__ == '__main__':
     )
 
     args = parser.parse_args()
-    assert (args.config.endswith((".yaml", ".yml")) and os.path.exists(args.config), 
-            f"[** FILEPATH NOT EXISTED **] Can't load config file from {args.config}.")
+    assert os.path.exists(args.config), f"[** FILEPATH NOT EXISTED **] Can't load config file from {args.config}."
 
     main(args)
