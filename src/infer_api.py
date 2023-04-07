@@ -95,7 +95,6 @@ def main(args):
 
     # load configurations
     cfgs = ParamsObject(yaml.load(open(args.config, 'r')))
-    addGoldens = cfgs.consider_labels
 
     # obtain device
     device = ('mps' if torch.backends.mps.is_available() else
