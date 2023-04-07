@@ -7,10 +7,10 @@ seed: 2023
 # DATA LOADING
 # the original csv file is not always used; only called when splitting is needec
 aoa_csv_filepath: "data/aoa-data.csv"
-aoapred_train_filepath: "data/aoapred-train.json"
-aoapred_val_filepath: "data/aoapred-val.json"
+aoapred_train_filepath: "data/aoapred-train-chr.json"
+aoapred_val_filepath: "data/aoapred-val-chr.json"
 # the test file is not used here but shall be included to check data subsets completeness
-aoapred_test_filepath: "data/aoapred-test.json"
+aoapred_test_filepath: "data/aoapred-test-chr.json"
 
 # MODEL TRAINING
 train_loader:
@@ -18,26 +18,48 @@ train_loader:
   num_workers: 4
   shuffle: true
 val_loader:
-  batch_size: 256
+  batch_size: 512
   num_workers: 4
 
 # MODEL CONFIGS
 tokenizer_name: bert-base-uncased
 model:
-  choice: later-fused
+  # choices: "pretrained-emb", "early-fused", "later-fused"
+  choice: pretrained-emb
   configs:
-    model_name: bert-base-uncased
-    interim_linear_dim: 32
-    dropout: 0.5
+    # # EasyReg or DualReg
+    # model_name: bert-base-uncased
+    # lstm_hidden_dim: 512
+    # lstm_num_layers: 2
+    # interim_linear_dim: 512
+    # dropout: 0.3
+    # concat_wlen: true
+    # concat_nsyl: true
+
+    # PTEmbReg
+    emb_dim: 512
+    dropout: 0.1
+    emb_linear_dims: 
+      - 2048
+      - 1024
+      - 1024
+    interim_linear_dim: 1024
+    lstm_hidden_dim: 512
+    lstm_num_layers: 2
     concat_wlen: true
     concat_nsyl: true
+  chridx_filepath: data/chr2idx.txt
 
 
 # TRAINER CLASS CONFIGS
 trainer_configs:
   optimizer:
-    lr: 5.0e-4
+    lr: 0.0001
     weight_decay: 0.10
+    amsgrad: true
+    betas:
+      - 0.9
+      - 0.99
   scaler: true
   scheduler:
     use: true
@@ -45,22 +67,22 @@ trainer_configs:
       mode: "min"
       factor: 0.5
       patience: 5
-      min_lr: 5.0e-8
+      min_lr: 1.0e-7
   wandb:
-    use: true
+    use: false
     init_configs:
       name: 
-      entity: Astromsoc
+      entity: 
       reinit: true
-      project: aoapred
-  max_saved_ckpts: 2
+      project: 
+  max_saved_ckpts: 3
 
 
 # EXPERIMENT CONFIGS
 exp_configs:
-  folder: exp/test
+  folder: exp/
   anno: ""
-  epoch: 20
+  epoch: 50
   finetune:
     use: false
     ckpt: 

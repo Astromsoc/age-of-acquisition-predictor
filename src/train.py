@@ -6,7 +6,7 @@
     Written & Maintained by: 
         Astromsoc
     Last Updated at:
-        Apr 6, 2023
+        Apr 7, 2023
 """
 
 
@@ -27,8 +27,6 @@ from transformers import BertTokenizer
 from src.utils import *
 from src.models import *
 from src.split import split_dataset
-
-
 
 
 
@@ -291,6 +289,14 @@ def main(args):
         for i, subname in enumerate('train val test'.split(' ')):
             # update configs
             cfgs.__dict__[f"aoapred_{subname}_filepath"] = subset_filepaths[i]
+    
+    # obtain chr2idx mapping for pretrained options
+    if cfgs.model.choice == 'pretrained-emb':
+        chr2idx = CharacterTokenizer(cfgs.model.chridx_filepath).chr2idx
+        os.system(f"cp {cfgs.model.chridx_filepath} {cfgs.exp_configs.folder}/chr2idx.txt")
+        # add num_chr & pad_idx to model configs
+        cfgs.model.configs.num_chr = len(chr2idx)
+        cfgs.model.configs.pad_idx = chr2idx['<unk>']
     
     # build datasets
     trainDataset = AoATrainDataset(cfgs.aoapred_train_filepath)

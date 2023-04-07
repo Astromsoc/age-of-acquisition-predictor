@@ -6,10 +6,11 @@
     Written & Maintained by: 
         Astromsoc
     Last Updated at:
-        Apr 6, 2023
+        Apr 7, 2023
 """
 
 
+import re
 import json
 import time
 
@@ -90,6 +91,41 @@ class AoATestDatasetWordOnly(Dataset):
 
     def __getitem__(self, index):
         return self.word_input_ids[index]
+
+
+
+class CharacterTokenizer:
+
+    """
+        Per-character tokenizer that convert words into list of character indices.
+        (mainly used in pretraining embeddings)
+    """
+
+    CHRLINE_REGEX = re.compile(r"(.+)\t([\d]+)")
+
+    def __init__(self, chr2idx_filepath: str):
+        # archiving
+        self.filepath = chr2idx_filepath
+        # load dictionary
+        self.chr2idx = {c: idx for l in open(self.filepath, 'r')
+                               for (c, idx) in [self.parse_chr2idx_line(l)]}
+        self.unk_idx = self.chr2idx['<unk>']
+    
+    def __call__(self, word: str):
+        return self.tokenize(word)
+    
+
+    def tokenize(self, word: str):
+        """
+            similar to the style of BertPretrainedTokenizer (for compatibility)
+        """
+        return {'input_ids': [self.chr2idx.get(c, self.unk_idx) for c in list(word)]}
+
+
+    def parse_chr2idx_line(self, chr2idx: str):
+        m = re.match(self.CHRLINE_REGEX, chr2idx)
+        return m.group(1), int(m.group(2))
+
 
 
 

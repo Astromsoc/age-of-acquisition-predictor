@@ -6,17 +6,21 @@
     Written & Maintained by: 
         Astromsoc
     Last Updated at:
-        Apr 3, 2023
+        Apr 7, 2023
 """
 
 
 import os
 import json
+import time
 import argparse
 import syllables
 import numpy as np
 import pandas as pd
 from transformers import BertTokenizer
+
+from src.utils import CharacterTokenizer
+
 
 
 # ratio of train/val/test after splitting
@@ -24,6 +28,7 @@ RATIOS = [0.8, 0.1, 0.1]
 # the column name of which reference age to take from
 #       options: ['AoAtestbased', 'AoArating]
 AGECOL = 'AoAtestbased'
+CHR2IDX_FILEPATH = 'data/chr2idx.txt'
 
 
 
@@ -93,6 +98,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--tokenizer', '-t', type=str,
         default='bert-base-uncased',
+        choices=['bert-base-uncased', 'character'],
         help='(str) pretrained tokenizer to tokenize input words/phrases.'
     )
 
@@ -101,7 +107,8 @@ if __name__ == '__main__':
             f"[** FILE NOT EXISTED **] Check filepath [{args.file}] is correct.")
     
     # load tokenizer
-    TOKENIZER = BertTokenizer.from_pretrained(args.tokenizer)
+    TOKENIZER = (CharacterTokenizer(CHR2IDX_FILEPATH) if args.tokenizer == 'character' 
+                 else BertTokenizer.from_pretrained(args.tokenizer))
 
     # split the input csv file
     split_dataset(filepath=args.file, 
