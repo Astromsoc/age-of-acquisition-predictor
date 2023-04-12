@@ -304,19 +304,21 @@ def main(args):
         os.system(f"cp {cfgs.model.chridx_filepath} {cfgs.exp_configs.folder}/chr2idx.txt")
         # add num_chr & pad_idx to model configs
         cfgs.model.configs.num_chr = len(chr2idx)
-        cfgs.model.configs.pad_idx = chr2idx['<unk>']
+        cfgs.model.configs.pad_idx = chr2idx['<pad>']
     
     # build datasets
-    trainDataset = AoATrainDataset(cfgs.aoapred_train_filepath)
-    valDataset = AoATrainDataset(cfgs.aoapred_val_filepath)
+    trainDataset = AoATrainDataset(filepath=cfgs.aoapred_train_filepath,
+                                   pad_idx=chr2idx['<pad>'])
+    valDataset   = AoATrainDataset(filepath=cfgs.aoapred_val_filepath,
+                                   pad_idx=chr2idx['<pad>'])
 
     # build dataloaders
     trainLoader = DataLoader(dataset=trainDataset, 
-                             collate_fn=train_collate, 
+                             collate_fn=trainDataset.collate_fn, 
                              **cfgs.train_loader.__dict__)
     valLoader = DataLoader(dataset=valDataset, 
                            shuffle=False, 
-                           collate_fn=train_collate, 
+                           collate_fn=valDataset.collate_fn, 
                            **cfgs.val_loader.__dict__)
 
     # obtain the checkpoint model configs if continue training

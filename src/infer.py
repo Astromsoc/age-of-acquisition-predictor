@@ -113,8 +113,9 @@ def main(args):
 
     
     # build datasets
-    testDataset = (AoATrainDataset(cfgs.aoapred_test_filepath) if addGoldens else
-                   AoATestDataset(cfgs.aoapred_test_filepath))
+    testDataset = (AoATrainDataset(cfgs.aoapred_test_filepath,
+                                   pad_idx=cfgs.pad_idx) if addGoldens else
+                   AoATestDataset(cfgs.aoapred_test_filepath, pad_idx=cfgs.pad_idx))
 
     # build dataloader
     testLoader = DataLoader(dataset=testDataset, shuffle=False, 

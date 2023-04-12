@@ -2,4 +2,4 @@
 # INFERENCE (API FLAVOR)
 
 # INFERRER CONFIGS
-ckpt: 
+ckpt: exp/ablations/epoch-16.pt

@@ -5,6 +5,7 @@
 # DATA LOADING
 aoapred_test_filepath: "data/aoapred-test.json"
 consider_labels: true
+pad_idx: 74
 
 
 # MODEL INFERENCE
