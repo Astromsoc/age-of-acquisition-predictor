@@ -7,14 +7,14 @@ seed: 2023
 # DATA LOADING
 # the original csv file is not always used; only called when splitting is needec
 aoa_csv_filepath: "data/aoa-data.csv"
-aoapred_train_filepath: "data/aoapred-train-chr.json"
-aoapred_val_filepath: "data/aoapred-val-chr.json"
+aoapred_train_filepath: "data/aoapred-train.json"
+aoapred_val_filepath: "data/aoapred-val.json"
 # the test file is not used here but shall be included to check data subsets completeness
-aoapred_test_filepath: "data/aoapred-test-chr.json"
+aoapred_test_filepath: "data/aoapred-test.json"
 
 # MODEL TRAINING
 train_loader:
-  batch_size: 256
+  batch_size: 512
   num_workers: 4
   shuffle: true
 val_loader:
@@ -37,15 +37,13 @@ model:
     # concat_nsyl: true
 
     # PTEmbReg
-    emb_dim: 512
-    dropout: 0.1
+    emb_dim: 256
+    dropout: 0.2
     emb_linear_dims: 
-      - 2048
       - 1024
-      - 1024
-    interim_linear_dim: 1024
-    lstm_hidden_dim: 512
-    lstm_num_layers: 2
+    interim_linear_dim: 2048
+    lstm_hidden_dim: 1024
+    lstm_num_layers: 3
     concat_wlen: true
     concat_nsyl: true
   chridx_filepath: data/chr2idx.txt
@@ -54,8 +52,8 @@ model:
 # TRAINER CLASS CONFIGS
 trainer_configs:
   optimizer:
-    lr: 0.0001
-    weight_decay: 0.10
+    lr: 0.001
+    weight_decay: 0.05
     amsgrad: true
     betas:
       - 0.9
@@ -68,13 +66,6 @@ trainer_configs:
       factor: 0.5
       patience: 5
       min_lr: 1.0e-7
-  wandb:
-    use: false
-    init_configs:
-      name: 
-      entity: 
-      reinit: true
-      project: 
   max_saved_ckpts: 3
 
 
@@ -86,4 +77,10 @@ exp_configs:
   finetune:
     use: false
     ckpt: 
-  
+  wandb:
+    use: false
+    init_configs:
+      name: 
+      entity: 
+      reinit: true
+      project: 

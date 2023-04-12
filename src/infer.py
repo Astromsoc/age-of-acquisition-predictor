@@ -6,12 +6,11 @@
     Written & Maintained by: 
         Astromsoc
     Last Updated at:
-        Apr 6, 2023
+        Apr 11, 2023
 """
 
 
 import os
-import wandb
 import argparse
 import numpy as np
 from tqdm import tqdm
@@ -19,16 +18,14 @@ from ruamel.yaml import YAML
 yaml = YAML(typ='safe')
 
 import torch
-from torchsummaryX import summary
 from torch.utils.data import DataLoader
 
 from src.utils import *
 from src.models import *
-from src.split import split_dataset
 
 
 
-class Inferrer:
+class Inferer:
     def __init__(self, ckpt: str, device: str='cuda'):
         self.ckpt = ckpt
         self.device = device
@@ -55,7 +52,6 @@ class Inferrer:
 
         # load scaler
         self.scaler = torch.cuda.amp.GradScaler() if loaded['configs']['trainer']['scaler'] else None
-
 
 
     def infer(self, tst_loader: DataLoader, with_labels: bool=False):
@@ -99,7 +95,6 @@ class Inferrer:
         
     
 
-
 """
     Main Driver Function
 """
@@ -126,16 +121,16 @@ def main(args):
                             collate_fn=train_collate if addGoldens else test_collate, 
                             **cfgs.test_loader.__dict__)
 
-    # build inferrer
-    inferrer = Inferrer(ckpt=cfgs.ckpt, device=device)
+    # build inferer
+    inferer = Inferer(ckpt=cfgs.ckpt, device=device)
 
     # infer all cases
-    preds = inferrer.infer(testLoader, with_labels=addGoldens)
+    preds = inferer.infer(testLoader, with_labels=addGoldens)
     if addGoldens: preds, test_avg_loss, test_avg_mae = preds
 
     # record the results
     output_filepath = os.path.join(
-        inferrer.exp_folder, 
+        inferer.exp_folder, 
         os.path.basename(cfgs.aoapred_test_filepath).replace('.json', '-inferred.json')
     )
     for i, pred in enumerate(preds):
@@ -148,7 +143,6 @@ def main(args):
     print(f"\n[** PRED FILE SAVED **] Predictions successfully saved to [{output_filepath}].\n")
     
     
-
 
 
 if __name__ == '__main__':

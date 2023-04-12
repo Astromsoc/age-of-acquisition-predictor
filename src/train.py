@@ -6,7 +6,7 @@
     Written & Maintained by: 
         Astromsoc
     Last Updated at:
-        Apr 7, 2023
+        Apr 11, 2023
 """
 
 
@@ -48,6 +48,7 @@ class Trainer:
         self.val_losses = list()
         self.val_maes = list()
         self.device = device
+        self.use_wandb = False
         # init from cfgs
         self.init_from_cfgs()
         # take model to device
@@ -76,12 +77,16 @@ class Trainer:
             # take to device
             ids, wlens = ids.to(self.device), wlens.to(self.device)
             nsyls, ages = nsyls.to(self.device), ages.to(self.device)
-            # obtain estimates
-            pred_ages = self.model(ids, wlens, nsyls)
+            # obtain estimates & compute losses
+            if self.scaler:
+                with torch.cuda.amp.autocast():
+                    pred_ages = self.model(ids, wlens, nsyls)
+                    loss = self.criterion(pred_ages, ages)
+            else:
+                pred_ages = self.model(ids, wlens, nsyls)
+                loss = self.criterion(pred_ages, ages)
             # compute mae
             train_mae_this_epoch[i] = (pred_ages - ages).norm(1) / len(pred_ages)
-            # compute loss
-            loss = self.criterion(pred_ages, ages)
             train_loss_this_epoch[i] = loss.item()
             # backprop & update
             if self.scaler:
@@ -106,7 +111,7 @@ class Trainer:
             )
             tqdm_bar.update()
             # push to wandb
-            if self.cfgs.wandb.use:
+            if self.use_wandb:
                 wandb.log({"train_loss_per_batch": train_loss_this_epoch[i],
                            "train_mae_per_batch": train_mae_this_epoch[i],
                            "grad_norm_per_batch": grad_norm[i]})
@@ -131,7 +136,11 @@ class Trainer:
                 ids, wlens = ids.to(self.device), wlens.to(self.device)
                 nsyls, ages = nsyls.to(self.device), ages.to(self.device)
                 # obtain estimates
-                pred_ages = self.model(ids, wlens, nsyls)
+                if self.scaler:
+                    with torch.cuda.amp.autocast():
+                        pred_ages = self.model(ids, wlens, nsyls)
+                else:
+                    pred_ages = self.model(ids, wlens, nsyls)
                 # compute mae
                 val_mae_this_epoch[i] = (pred_ages - ages).norm(1) / len(pred_ages)
                 # compute loss
@@ -154,7 +163,6 @@ class Trainer:
         """
             Train the current model for what's been specified in input experiment configs.
         """
-
         # if finetuning: load checkpoint
         if expcfgs.finetune.use:
             self.load_model(expcfgs.finetune.ckpt)
@@ -171,7 +179,7 @@ class Trainer:
             # update learning rate
             if self.scheduler: self.scheduler.step(self.val_losses[-1])
             # push to wandb
-            if self.cfgs.wandb.use:
+            if self.use_wandb:
                 wandb.log({'train_loss_per_epoch': self.train_losses[-1],
                            'train_mae_per_epoch': self.train_maes[-1],
                            'train_gradnorm_per_epoch': self.train_gradnorms[-1],
@@ -319,11 +327,6 @@ def main(args):
     # create folder if not existed
     if not os.path.exists(cfgs.exp_configs.folder):
         os.makedirs(cfgs.exp_configs.folder, exist_ok=True)
-    # copy model configs & other configs
-    json.dump({'choice': cfgs.model.choice, 'configs': cfgs.model.configs.__dict__},
-              open(os.path.join(cfgs.exp_configs.folder, 'model-configs.json'), 'w'),
-              indent=4)
-    os.system(f"cp {args.config} {cfgs.exp_configs.folder}/configs.yaml")
 
     # build model
     assert cfgs.model.choice in ChooseYourModel.keys(), (f"[** INVALID MODEL **] {cfgs.model.choice} "
@@ -347,9 +350,9 @@ def main(args):
     )
 
     # initiate wandb log tracker
-    if cfgs.trainer_configs.wandb.use:
+    if cfgs.exp_configs.wandb.use:
         # add run name automatically
-        cfgs.trainer_configs.wandb.init_configs.name = (
+        cfgs.exp_configs.wandb.init_configs.name = (
             f"{cfgs.model.choice}-"
             f"interrim-dim-{cfgs.model.configs.interim_linear_dim}-"
             f"dropout-{cfgs.model.configs.dropout:.2f}-"
@@ -360,8 +363,17 @@ def main(args):
             f"{'with' if cfgs.model.configs.concat_nsyl else 'no'}-nsyl"
         )
         if cfgs.exp_configs.anno: 
-            cfgs.trainer_configs.wandb.init_configs.name += f"-{cfgs.exp_configs.anno}" 
-        wandb.init(config=cfgs, **cfgs.trainer_configs.wandb.init_configs.__dict__)
+            cfgs.exp_configs.wandb.init_configs.name += f"-{cfgs.exp_configs.anno}" 
+        wandb.init(config=cfgs, **cfgs.exp_configs.wandb.init_configs.__dict__)
+        # revise experiment folder if name is specified
+        cfgs.exp_configs.folder = cfgs.exp_configs.wandb.init_configs.name
+
+
+    # copy model configs & other configs
+    json.dump({'choice': cfgs.model.choice, 'configs': cfgs.model.configs.__dict__},
+              open(os.path.join(cfgs.exp_configs.folder, 'model-configs.json'), 'w'),
+              indent=4)
+    os.system(f"cp {args.config} {cfgs.exp_configs.folder}/configs.yaml")
 
     # start training
     trainer.train(cfgs.exp_configs)
